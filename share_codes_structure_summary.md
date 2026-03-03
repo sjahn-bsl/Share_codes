@@ -13,7 +13,9 @@
   - 하이퍼파라미터 후보값 생성(get_param_values_int/log/float/category).
 
 - `feature_names.py` (확인함)  
-  - feature 코드 → (HTML / Matplotlib LaTeX) 표시명 매핑 + 매핑 문서(HTML/PNG) 생성 도구.
+  - feature 코드 → 표시명 매핑 dict 제공: feature_name_html(HTML/웹 표기), feature_name_mpl(Matplotlib LaTeX 표기). get_feature_name(feature_code, format='html'|'mpl')로 포맷 선택 조회, feature_name_dict는 html dict alias(하위호환).
+  - 매핑 문서/검증 도구: 콘솔 출력(print_all_conversions), PNG 생성(test_matplotlib_rendering, create_feature_grid, create_category_view), HTML 리포트 생성(save_features_html: matplotlib 렌더링 이미지를 base64로 HTML에 포함하고 브라우저 오픈).
+  - CLI 지원: python feature_names.py [html|test|grid|category|all|print].
 
 - `figure_default_settings.py` (확인함)  
   - Plotly/Matplotlib figure 템플릿, 크기(mm→px), 저장(scale 포함) 유틸.
