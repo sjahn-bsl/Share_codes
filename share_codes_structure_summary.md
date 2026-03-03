@@ -80,16 +80,23 @@
 ### 3) Sequence/Flatten 생성
 
 - `scripts/3_data_preparation/sequential_data.py` (확인함)  
-  - features pkl → window_size=10 시퀀스 생성 → `X_seq_*`, `X_flat_*` 등 저장.  
-  - `GroupKFold` 기반 CV split 생성 코드는 **주석 처리**.
+  - features pkl(`feature_path`) 로드 후 `set_test_ids`로 **cell_id 기준 train/test 분리**. window_size=10으로 슬라이딩 윈도우 시퀀스 생성(입력: 과거 10 cycles feature, 타깃: 현재 cycle의 RSL/Class). NaN 포함 시퀀스는 skip, feature 차원 불일치 시 ValueError.
+  - 저장(모두 pkl, torch tensor 기반):
+    - train: X_seq_train.pkl, y_seq_train_RSL.pkl, y_seq_train_Class.pkl, seq_train_cell_ids.pkl, X_flat_train.pkl, y_flat_train_RSL.pkl, y_flat_train_Class.pkl
+    - test: X_seq_test.pkl, y_seq_test_RSL.pkl, y_seq_test_Class.pkl, seq_test_cell_ids.pkl, X_flat_test.pkl, y_flat_test_RSL.pkl, y_flat_test_Class.pkl
+  - `GroupKFold` 기반 CV split 예시 코드는 **주석 처리**되어 있으며, 그대로 uncomment 시 y_seq_train 변수 미정의로 수정이 필요할 수 있음.
 
 ### 4) 모델 학습 (현재 공유된 범위: RF 회귀)
 
 - `scripts/4_model_training/.../2_RF/RF_tuning_reg.ipynb` (확인함)  
-  - `X_flat_train`, `y_flat_train_RSL` + `cv_splits_seq_train`로 RF 회귀 튜닝(Grid/Randomized).
+  - `X_flat_train`, `y_flat_train_RSL` 로드 후, `cv_splits_seq_train`을 사용해 RF 회귀 하이퍼파라미터 탐색을 수행(GridSearchCV, RandomizedSearchCV).
+  - 탐색 공간은 `settings.RF_reg_param_ranges`를 `data_utils.get_param_values_*`로 샘플링해 `grid_params`를 구성.
+  - 추가로 `StandardScaler + RF 파이프라인` 기반 GridSearch도 포함.
 
 - `scripts/4_model_training/.../2_RF/RF_eval_reg.ipynb` (확인함)  
-  - 선택 파라미터로 학습/평가(RMSE) + Plotly 시각화.
+  - X_flat_train/test, y_flat_train/test_RSL 로드 후, 노트북 내에 **수동 정의한 `selected_params`**로 RF 학습/예측 및 RMSE(train/test) 계산.
+  - Plotly 기반 시각화(Train/Test 산점도 + test error 히스토그램 인셋).
+  - `save_with_scale`를 이용한 저장 코드는 예시로 존재하나 현재는 주석 처리.
 
 ---
 
