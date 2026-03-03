@@ -18,19 +18,23 @@
   - CLI 지원: python feature_names.py [html|test|grid|category|all|print].
 
 - `figure_default_settings.py` (확인함)  
-  - Plotly/Matplotlib figure 템플릿, 크기(mm→px), 저장(scale 포함) 유틸.
+  - Plotly/Matplotlib 기본 스타일(템플릿/rcParams) 설정 유틸: Plotly custom_mirror_grid 템플릿 생성(plotly_default) + legend 위치 전환(outside_legend/inside_legend), Matplotlib rcParams 프리셋(matplot_default).
+  - Figure 크기 유틸: Plotly는 mm→px(mm_to_px, get_figure_size_mm), Matplotlib은 mm→inch(get_matplot_figure_size_mm). PREVIEW_DPI(96)/EXPORT_DPI(600) 구분.
+  - 생성/저장/표시: Plotly create_fig, add_subplot, save_with_scale(write_image scale로 물리폭 맞춤, 선택적 HTML 저장), show_fig; Matplotlib create_matplot_fig, save_matplot_with_scale, show_matplot_fig.
 
 ---
 
 ## B. 데이터 포맷/레지스트리 (라이브러리)
 
 - `tool_battery_data/battery_data.py` (확인함)  
-  - `BatteryData`, `CycleData`로 processed_data pkl을 표준 객체로 로드/저장.
+  - `CycleData, BatteryData(및 CyclingProtocol) 정의.
+  - BatteryData.load(path): pickle에 저장된 dict를 로드 후 객체로 재구성.
+  - BatteryData.dump(path): 객체를 to_dict()로 dict 직렬화하여 pickle 저장.
 
 - `tool_battery_data/data_registry.py` (확인함)  
-  - `processed_data`를 스캔하거나 캐시(`data_registry.pkl`)를 로드해  
-    `cell_id → 파일경로`(및 cell_type별 묶음) 딕셔너리 제공.  
-  - 캐시가 없으면 import만으로도 전체 스캔/로드가 발생할 수 있음(코드 구조상).
+  - data_registry.pkl 캐시가 있으면 로드, 없으면 processed_data_path의 pkl들을 순회하며 BatteryData.load로 실제 로드해 cell_id → 파일경로, cell_type → 파일경로 리스트 dict 생성 후 캐시 저장.  
+  - cell_type은 cell_id.split('_')[0] 기반이며 'Ref' 포함 시 'Ref'로 통합.
+  - 캐시가 없으면 import 시점에 전체 pkl 로드가 발생(초기 실행 비용 큼).
 
 ---
 
