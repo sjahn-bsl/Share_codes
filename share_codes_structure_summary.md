@@ -58,22 +58,24 @@
 ### 0) 전처리
 
 - `scripts/0_data_preprocessing/txt_data_to_csv_data.ipynb` (확인함)  
-  - txt 원본 → csv 변환 규칙 기반 파서.
+  - txt → csv 변환 노트북. 헤더는 `Index`로 시작하는 줄을 탭 분리해 추출하고, 데이터는 `1` 또는 `1\t`로 시작하는 줄부터 끝까지를 `split()`으로 파싱해 저장. `miss_col_list`(기본 IR(ohm)) 컬럼 제거 옵션 포함. cell_type_list를 순회하며 `txt_data/{cell_type}` → `raw_data/{cell_type}`로 저장(경로 하드코딩).
 
 - `scripts/0_data_preprocessing/fast_data_preprocessing_with_gpu.ipynb` (확인함)  
-  - raw csv → 셀별 processed_data pkl 생성(GPU 라이브러리 사용, 경로 하드코딩 존재).
+  - `raw_data/` 하위 csv들을 스캔해 셀별 `processed_data/*.pkl` 생성. `dask_cudf/cudf`로 CSV를 읽고, cycle별로 Step_No.×Current(A) 평균을 이용해 음수 전류 step을 방전 구간으로 판정한 뒤 `|Q|(Ah)`를 0 처리해 charge/discharge capacity를 분리. Test_Time(s)를 초 단위로 변환해 저장. 이후 `nominal_capacity.csv`로 `nominal_capacity_in_Ah`를 pkl에 후처리 업데이트. 경로 하드코딩 존재.
 
 ### 1) Feature 추출 (엔트리)
 
 - `scripts/1_feature_extraction/feature_extraction.py` (확인함)  
-  - processed_data를 로드해 cycle별 feature+라벨 생성 → `data/features/features_{feature_ver}.pkl` 저장.  
-  - `hard_short_dict[cell_id]`를 기준으로 **ISC 이후 cycle은 break**(누수 방지 목적).
+  - `cell_id_path_dict`의 각 셀 pkl을 `BatteryData.load`로 로드 후, cycle별로 `FeatureExtractor.get_features` + RSL/Class 라벨을 생성하고 cell_id, cycle_number 메타를 추가해 통합 DataFrame으로 저장(feature_path = .../features_{feature_ver}.pkl).  
+  - 누수 방지: `hard_short_dict[cell_id]`(ISC 사이클) 기준으로 `cycle_number >= ISC`에서 즉시 break하여 ISC 사이클 포함 이후 데이터를 제외. 또한 `feature_start_cycle` 이전 cycle은 skip.
+  - 실행 방식: 멀티프로세싱(`ProcessPoolExecutor`) + 배치 처리/중간 저장 + 중단 시 이어달리기(기존 pkl 로드 후 resume) + 완료 후 컬럼을 (cell_info/label/feature/other) 2-level MultiIndex로 변환해 최종 저장.
 
 ### 2) Split
 
 - `scripts/2_data_split/split.py` (확인함)  
-  - features pkl → `set_test_ids` 기준으로 holdout split → `data/train_data`, `data/test_data` 저장.  
-  - 파일 하단에서 `split_data('Regression')`을 바로 호출(실행 시 자동 수행).
+  - feature_path(features pkl)을 로드 후, `set_test_ids`(cell_id 리스트) 기준으로 셀 ID 홀드아웃 분할하여 train/test DataFrame을 구성.
+  - `x_train/x_test`(feature), `y_train/y_test`(Regression=RSL 또는 Classification=Class)을 `to_tensor`로 텐서 변환 후 pkl 저장. 저장 산출물: x_train.pkl, x_test.pkl, y_train_{RSL|Class}.pkl, y_test_{RSL|Class}.pkl, train_cell_ids.pkl, test_cell_ids.pkl, feature_columns.pkl (저장 경로는 train_data_path, test_data_path 설정값).
+  - 파일 하단에서 `split_data('Regression')`을 직접 호출하므로 실행/임포트 시 자동 수행됨.
 
 ### 3) Sequence/Flatten 생성
 
