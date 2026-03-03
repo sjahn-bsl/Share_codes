@@ -41,13 +41,15 @@
 ## C. Feature 계산/조립 + 라벨 생성 (라이브러리)
 
 - `tool_feature_extraction/battery_features.py` (확인함)  
-  - 개별 feature 계산 함수 모음 + 계산비용 큰 중간값 캐시(pkl) 로딩 구조  
-    (`cell_capacity_data.pkl`, `Rest_voltage_data.pkl`, `charge_time_data.pkl` 등).
+  - 개별 feature 계산 함수(dQ, charge time, rest voltage, SOH/CE, 기타) 모음.
+  - 캐시(pkl) 구조: cell_capacity_data.pkl, Rest_voltage_data.pkl, charge_time_data.pkl 경로를 잡고 존재 시 LazyMapping으로 지연 로딩(최초 접근 시 pickle.load).
+  - 주의: Capacity_dict, Rest_voltage_data_dict는 캐시가 없으면 일부 feature 계산에서 NameError/KeyError 위험이 있음(사전 생성 함수 save_* 실행 필요).
+  - 또한 cell_id_path_dict를 import하므로, data_registry의 초기 로딩 비용/부작용이 영향을 줄 수 있음.
 
 - `tool_feature_extraction/feature_extractor.py` (확인함)  
-  - `FeatureExtractor.get_features(cur_cyc_i)`로 42개 feature를 조립.  
-  - `labeling_regression`(RSL), `labeling_classification` 생성.  
-  - feature 누락 시 `ValueError`로 강하게 검증.
+  - FeatureExtractor.get_features(cur_cyc_i)는 settings.all_feature_names에 포함된 feature만 계산/조립(기본 설정에선 42개). need()/need_suffix()로 불필요 계산을 건너뛰어 비용 절감.
+  - 라벨: labeling_regression는 RSL(=hard_short_cycle−현재 cycle), labeling_classification은 RSL<=N_cycle_interval 기준 이진 라벨(+ RSL==0이면 예외).
+  - 누락 feature 존재 시 ValueError로 강하게 검증.
 
 ---
 
