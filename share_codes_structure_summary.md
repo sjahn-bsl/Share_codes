@@ -1,0 +1,118 @@
+# Share_codes 코드 구조 요약 (현재까지 “열어 확인한 것” 기준)
+
+## A. 공용 설정/유틸 (루트)
+
+- `settings.py` (확인함)  
+  - 경로(`data/*`), 버전(`label_ver`, `feature_ver`), 42개 feature 목록(`all_feature_names`), 모델 HP 범위(RF/XGB/SVM).  
+  - 라벨 dict와 CV split pkl을 **파일이 존재하면 import 시점에 로딩**하는 구조.
+
+- `data_utils.py` (확인함)  
+  - 입력 데이터 → torch.Tensor 변환(to_tensor), 시간 포맷/기준일 변환(convert_seconds, convert_date).
+  - step 컬럼 기준으로 CC/CV/Rest_chr/Dch/Rest_dch 구간 분리(slicing_data_by_step); cell_id에 'Vm4.3'가 포함되면 2차 충전(Second_CC/Second_CV/Second_chr/Second_Rest_chr)도 추가 분리.
+  - 분리된 구간 중 필요한 데이터 반환(get_charge_data: 기본은 Chr_data, 옵션으로 CC/CV/Dch/2차 충전 반환).
+  - 하이퍼파라미터 후보값 생성(get_param_values_int/log/float/category).
+
+- `feature_names.py` (확인함)  
+  - feature 코드 → (HTML / Matplotlib LaTeX) 표시명 매핑 + 매핑 문서(HTML/PNG) 생성 도구.
+
+- `figure_default_settings.py` (확인함)  
+  - Plotly/Matplotlib figure 템플릿, 크기(mm→px), 저장(scale 포함) 유틸.
+
+---
+
+## B. 데이터 포맷/레지스트리 (라이브러리)
+
+- `tool_battery_data/battery_data.py` (확인함)  
+  - `BatteryData`, `CycleData`로 processed_data pkl을 표준 객체로 로드/저장.
+
+- `tool_battery_data/data_registry.py` (확인함)  
+  - `processed_data`를 스캔하거나 캐시(`data_registry.pkl`)를 로드해  
+    `cell_id → 파일경로`(및 cell_type별 묶음) 딕셔너리 제공.  
+  - 캐시가 없으면 import만으로도 전체 스캔/로드가 발생할 수 있음(코드 구조상).
+
+---
+
+## C. Feature 계산/조립 + 라벨 생성 (라이브러리)
+
+- `tool_feature_extraction/battery_features.py` (확인함)  
+  - 개별 feature 계산 함수 모음 + 계산비용 큰 중간값 캐시(pkl) 로딩 구조  
+    (`cell_capacity_data.pkl`, `Rest_voltage_data.pkl`, `charge_time_data.pkl` 등).
+
+- `tool_feature_extraction/feature_extractor.py` (확인함)  
+  - `FeatureExtractor.get_features(cur_cyc_i)`로 42개 feature를 조립.  
+  - `labeling_regression`(RSL), `labeling_classification` 생성.  
+  - feature 누락 시 `ValueError`로 강하게 검증.
+
+---
+
+## D. 파이프라인 실행 (스크립트/노트북)
+
+### 0) 전처리
+
+- `scripts/0_data_preprocessing/txt_data_to_csv_data.ipynb` (확인함)  
+  - txt 원본 → csv 변환 규칙 기반 파서.
+
+- `scripts/0_data_preprocessing/fast_data_preprocessing_with_gpu.ipynb` (확인함)  
+  - raw csv → 셀별 processed_data pkl 생성(GPU 라이브러리 사용, 경로 하드코딩 존재).
+
+### 1) Feature 추출 (엔트리)
+
+- `scripts/1_feature_extraction/feature_extraction.py` (확인함)  
+  - processed_data를 로드해 cycle별 feature+라벨 생성 → `data/features/features_{feature_ver}.pkl` 저장.  
+  - `hard_short_dict[cell_id]`를 기준으로 **ISC 이후 cycle은 break**(누수 방지 목적).
+
+### 2) Split
+
+- `scripts/2_data_split/split.py` (확인함)  
+  - features pkl → `set_test_ids` 기준으로 holdout split → `data/train_data`, `data/test_data` 저장.  
+  - 파일 하단에서 `split_data('Regression')`을 바로 호출(실행 시 자동 수행).
+
+### 3) Sequence/Flatten 생성
+
+- `scripts/3_data_preparation/sequential_data.py` (확인함)  
+  - features pkl → window_size=10 시퀀스 생성 → `X_seq_*`, `X_flat_*` 등 저장.  
+  - `GroupKFold` 기반 CV split 생성 코드는 **주석 처리**.
+
+### 4) 모델 학습 (현재 공유된 범위: RF 회귀)
+
+- `scripts/4_model_training/.../2_RF/RF_tuning_reg.ipynb` (확인함)  
+  - `X_flat_train`, `y_flat_train_RSL` + `cv_splits_seq_train`로 RF 회귀 튜닝(Grid/Randomized).
+
+- `scripts/4_model_training/.../2_RF/RF_eval_reg.ipynb` (확인함)  
+  - 선택 파라미터로 학습/평가(RMSE) + Plotly 시각화.
+
+---
+
+## E. 라벨링/테스트 노트북
+
+- `notebooks/labeling/Hard short labeling.ipynb` (확인함)  
+  - 규칙(flag) 기반 hard short 탐지/QC.  
+  - **hard_short_cycle dict 저장은 주석 처리**, 대신 hard_short_flag pkl 저장.
+
+- `notebooks/labeling/Soft short labeling.ipynb` (확인함)  
+  - peak pkl 기반 soft short 탐지(조건 3종).  
+  - **soft_short_cycle dict 저장 주석 처리**, flag 저장도 주석 처리.
+
+- `notebooks/analysis/model_HP_default_values.ipynb` (확인함)  
+  - RF/XGB/SVM 기본 하이퍼파라미터 `get_params()` 출력 참고.
+
+- `notebooks/test/test.ipynb` (확인함)  
+  - 캐시 생성 함수 import(호출은 주석), `label_ver`/registry key 출력 스모크 테스트.
+
+- `notebooks/test/figure_test.ipynb` (확인함)  
+  - `figure_default_settings` + `feature_names` 사용 예시(Plotly/Matplotlib로 feature vs RSL 시각화).
+
+---
+
+## “모르는 것 / 확인하지 못함” (폴더·파일명 기준으로 명시)
+
+- 루트 `__init__.py` : 확인하지 못함
+- `tool_battery_data/__init__.py` : 확인하지 못함
+- `tool_feature_extraction/__init__.py` : 확인하지 못함
+- `info_feature/feature_name_list.html` : 확인하지 못함
+- `info_feature/feature_matplotlib_latex_names.png` : 확인하지 못함
+- `info_labeling/soft_flag_detection_summary.xlsx` : 확인하지 못함
+- `info_labeling/soft_short_first_flag_only.html` : 확인하지 못함
+- `notebooks/visualization/` 내부 파일들 : 확인하지 못함
+- `data/cross_validation/` 내부 파일들 : 확인하지 못함
+- `cv_splits_seq_train.pkl`이 **어떤 코드에서 생성되는지** : 현재 공유된 코드들에서는 생성부를 확인하지 못함(사용/로드만 존재)
