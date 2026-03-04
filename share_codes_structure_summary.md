@@ -86,8 +86,9 @@
     - test: X_seq_test.pkl, y_seq_test_RSL.pkl, y_seq_test_Class.pkl, seq_test_cell_ids.pkl, X_flat_test.pkl, y_flat_test_RSL.pkl, y_flat_test_Class.pkl
   - `GroupKFold` 기반 CV split 예시 코드는 **주석 처리**되어 있으며, 그대로 uncomment 시 y_seq_train 변수 미정의로 수정이 필요할 수 있음.
 
-### 4) 모델 학습 (현재 공유된 범위: RF 회귀)
+### 4) 모델 학습 (현재 공유된 범위: RF 회귀 + RF 분류)
 
+[RF 회귀]
 - `scripts/4_model_training/.../2_RF/RF_tuning_reg.ipynb` (확인함)  
   - `X_flat_train`, `y_flat_train_RSL` 로드 후, `cv_splits_seq_train`을 사용해 RF 회귀 하이퍼파라미터 탐색을 수행(GridSearchCV, RandomizedSearchCV).
   - 탐색 공간은 `settings.RF_reg_param_ranges`를 `data_utils.get_param_values_*`로 샘플링해 `grid_params`를 구성.
@@ -97,6 +98,33 @@
   - X_flat_train/test, y_flat_train/test_RSL 로드 후, 노트북 내에 **수동 정의한 `selected_params`**로 RF 학습/예측 및 RMSE(train/test) 계산.
   - Plotly 기반 시각화(Train/Test 산점도 + test error 히스토그램 인셋).
   - `save_with_scale`를 이용한 저장 코드는 예시로 존재하나 현재는 주석 처리.
+
+[RF 분류]
+- `scripts/4_model_training/2_Classification/ML/2_RF/RF_tuning_clf.ipynb` (확인함)
+  - `X_flat_train`, `y_flat_train_Class` 로드 후, `cv_splits_seq_train`을 사용해 하이퍼파라미터 탐색 수행(GridSearchCV, RandomizedSearchCV).
+  - 탐색 공간은 `settings.RF_clf_param_ranges`를 `data_utils.get_param_values_*`로 샘플링해 `grid_params` 구성(+ `random_state=[seed]` 고정).
+  - `StandardScaler + RandomForestClassifier` 파이프라인 기반 GridSearch 포함(파라미터 키는 `model__*` 접두사 사용).
+  - scoring은 `'accuracy'`로 설정되어 있음(그리드/랜덤/파이프라인 모두 동일).
+
+- `scripts/4_model_training/2_Classification/ML/2_RF/RF_eval_clf.ipynb` (확인함)
+  - `X_flat_train/test`, `y_flat_train/test_Class` 로드 후, 노트북 내에 **수동 정의한 `selected_params`**로 `RandomForestClassifier` 학습/예측.
+  - 평가 지표(출력): Train/Test Accuracy, Train/Test Balanced Accuracy, Train/Test macro F1,
+    + (ISC=1 기준) Train/Test Precision/Recall/F1,
+    + (가능하면) Test PR-AUC(average precision).
+  - Confusion Matrix를 Plotly heatmap(`plot_confusion_matrix_blue`)으로 시각화하며, `save_with_scale`로 저장 옵션 제공.
+  - SMOTE 오버샘플링 함수/클래스 가중치 유틸이 포함되어 있으나, 기본 학습 경로에서는 **미사용**(옵션 기능).
+  - `selected_params`의 `criterion`은 `"gini"`로 설정됨(분류 목적과 정합).
+
+- `scripts/4_model_training/2_Classification/ML/2_RF/RF_Soft_F1_clf.ipynb` (확인함)
+  - 표준 RF 대신, **weighted soft-F1(soft_f1_weighted)을 분할 기준(gain)으로 사용하는 커스텀 모델**
+    `SoftF1RandomForestClassifier`/`SoftF1TreeClassifier`(노트북 내 구현)를 학습/평가.
+  - `pos_weight='auto'`는 학습 시 `neg/pos` 비율로 자동 설정되어 positive(ISC=1) 탐지를 더 중시하도록 설계.
+  - `calculate_class_weight(..., 'squared_balanced')`로 만든 `sample_weight`를 `fit(..., sample_weight=...)`에 사용.
+  - 평가 지표: macro F1 / macro Precision / macro Recall / Accuracy + Confusion Matrix(Plotly heatmap),
+    + confusion matrix 기반 Class 1(ISC) recall(TP/(TP+FN)) 및 predicted positive rate 출력.
+  - SMOTE 오버샘플링 함수(oversample_data)가 있으나 호출은 주석 처리(기능은 미사용 기본).
+    단, `imblearn`을 셀에서 import하므로 실행 환경에 `imblearn`이 없으면 ImportError 가능.
+    또한 `calculate_class_weight` 내부에서 `torch`를 import하므로 `torch` 미설치 시 실행 실패 가능.
 
 ---
 
